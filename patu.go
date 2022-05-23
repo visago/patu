@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -78,8 +79,11 @@ func httpServerStart() {
 	http.HandleFunc("/rand1", randServer1)
 	http.HandleFunc("/rand2", randServer2)
 	http.HandleFunc("/echo", echoServer)
-	http.HandleFunc("/space", spaceServer1)
+	http.HandleFunc("/null", nullServer)
+	http.HandleFunc("/dd", ddServer)
+	http.HandleFunc("/space", spaceServer)
 	http.HandleFunc("/space1", spaceServer1)
+	http.HandleFunc("/space2", spaceServer2)
 	http.HandleFunc("/hash", hashServer)
 	http.HandleFunc("/ip", ipServer)
 	http.HandleFunc("/melt", meltServer)
@@ -181,7 +185,7 @@ func randServer2(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["size"]
 
 	if ok && len(keys[0]) > 0 {
-		readsize, err := strconv.ParseInt(keys[0], 10, 32)
+		readsize, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
 			readsize = 1024
 		} else if readsize <= 0 {
@@ -189,7 +193,7 @@ func randServer2(w http.ResponseWriter, r *http.Request) {
 		}
 		size = int(readsize)
 	}
-	fmt.Fprintf(w, "%s\n", RandStringBytesMaskImprSrcUnsafe(size))
+	io.WriteString(w, RandStringBytesMaskImprSrcUnsafe(size))
 }
 
 func randServer1(w http.ResponseWriter, r *http.Request) {
@@ -199,7 +203,7 @@ func randServer1(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["size"]
 
 	if ok && len(keys[0]) > 0 {
-		readsize, err := strconv.ParseInt(keys[0], 10, 32)
+		readsize, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
 			readsize = 1024
 		} else if readsize <= 0 {
@@ -207,7 +211,58 @@ func randServer1(w http.ResponseWriter, r *http.Request) {
 		}
 		size = int(readsize)
 	}
-	fmt.Fprintf(w, "%s\n", RandString(size))
+	io.WriteString(w, RandString(size))
+}
+
+func nullServer(w http.ResponseWriter, r *http.Request) {
+	metricsConnectionTotal.Inc()
+	metricsUriTotal.With(prometheus.Labels{"uri": r.URL.Path}).Inc()
+	var size = 1024 // Default of 1024 chars
+	keys, ok := r.URL.Query()["size"]
+
+	if ok && len(keys[0]) > 0 {
+		readsize, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			readsize = 1024
+		} else if readsize <= 0 {
+			readsize = 1024
+		}
+		size = int(readsize)
+	}
+	w.Write(make([]byte, size))
+}
+
+func ddServer(w http.ResponseWriter, r *http.Request) {
+	metricsConnectionTotal.Inc()
+	metricsUriTotal.With(prometheus.Labels{"uri": r.URL.Path}).Inc()
+	var bs = 1073741824 // Default of 1gb
+	var count = 1       // 1gb file
+	keys1, ok1 := r.URL.Query()["bs"]
+	keys2, ok2 := r.URL.Query()["count"]
+
+	if ok1 && len(keys1[0]) > 0 {
+		readsize, err := strconv.ParseInt(keys1[0], 10, 64)
+		if err != nil {
+			readsize = 1
+		} else if readsize <= 0 {
+			readsize = 1
+		}
+		bs = int(readsize)
+	}
+	if ok2 && len(keys2[0]) > 0 {
+		readsize, err := strconv.ParseInt(keys2[0], 10, 64)
+		if err != nil {
+			readsize = 1
+		} else if readsize <= 0 {
+			readsize = 1
+		}
+		count = int(readsize)
+	}
+
+	dd := make([]byte, bs)
+	for i := 0; i < count; i++ {
+		w.Write(dd)
+	}
 }
 
 func hashServer(w http.ResponseWriter, r *http.Request) {
@@ -260,7 +315,29 @@ func echoServer(w http.ResponseWriter, r *http.Request) {
 	if ok && len(keys[0]) > 0 {
 		input = keys[0]
 	}
-	fmt.Fprintf(w, "%s\n", input)
+	io.WriteString(w, input)
+}
+
+func spaceServer(w http.ResponseWriter, r *http.Request) {
+	metricsConnectionTotal.Inc()
+	metricsUriTotal.With(prometheus.Labels{"uri": r.URL.Path}).Inc()
+	var size = 1024 // Default of 1024 chars
+	keys, ok := r.URL.Query()["size"]
+
+	if ok && len(keys[0]) > 0 {
+		readsize, err := strconv.ParseInt(keys[0], 10, 64) // Sprintf only supports 32bit ?
+		if err != nil {
+			readsize = 1024
+		} else if readsize <= 0 {
+			readsize = 1024
+		}
+		size = int(readsize)
+	}
+	if size > 10000009 {
+		io.WriteString(w, strings.Repeat(" ", size))
+	} else {
+		fmt.Fprintf(w, fmt.Sprintf("%%%0ds", size), "")
+	}
 }
 
 func spaceServer1(w http.ResponseWriter, r *http.Request) {
@@ -270,7 +347,7 @@ func spaceServer1(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["size"]
 
 	if ok && len(keys[0]) > 0 {
-		readsize, err := strconv.ParseInt(keys[0], 10, 32)
+		readsize, err := strconv.ParseInt(keys[0], 10, 32) // Sprintf only supports 32bit ?
 		if err != nil {
 			readsize = 1024
 		} else if readsize <= 0 {
@@ -280,6 +357,25 @@ func spaceServer1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, fmt.Sprintf("%%%0ds", size), "")
+}
+
+func spaceServer2(w http.ResponseWriter, r *http.Request) {
+	metricsConnectionTotal.Inc()
+	metricsUriTotal.With(prometheus.Labels{"uri": r.URL.Path}).Inc()
+	var size = 1024 // Default of 1024 chars
+	keys, ok := r.URL.Query()["size"]
+
+	if ok && len(keys[0]) > 0 {
+		readsize, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			readsize = 1024
+		} else if readsize <= 0 {
+			readsize = 1024
+		}
+		size = int(readsize)
+	}
+
+	io.WriteString(w, strings.Repeat(" ", size))
 }
 
 func ReadUserIP(r *http.Request) string {
