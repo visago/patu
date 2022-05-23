@@ -17,3 +17,9 @@ run:
 	
 clean:
 	rm -rf bin/patu
+
+
+docker:
+	docker buildx build -f Dockerfile --platform linux/amd64,linux/arm64 -t visago/patu:${VERSION} --push .
+	docker buildx build -f Dockerfile --platform linux/amd64,linux/arm64 -t visago/patu:latest --push .
+	
